@@ -52,6 +52,7 @@ class MainConfiguration implements ConfigurationInterface
             ->children()
                 ->arrayNode('manifest')
                     ->children()
+                        ->booleanNode('themes')->defaultTrue()->end()
                         ->scalarNode('name')->defaultValue('cache.manifest')->end()
                         ->arrayNode('cacheFiles')->
                             prototype('scalar')

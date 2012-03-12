@@ -195,18 +195,42 @@ class DumpCommand extends ContainerAwareCommand
     private function dumpManifest($paths, OutputInterface $output)
     {
         $basePath = realpath(rtrim($this->basePath, '/'));
-        $target = $basePath.'/'.$this->manifest['name'];
-        $output->writeln('<info>[file+]</info> '.$target);
-        if (file_exists($target)) {
-            $manifest = file_get_contents($target);
-            if (preg_match('/^#Version: (\d+)$/m', $manifest, $matches)) {
-                $version = (int)$matches[1];
+
+        $themes = array();
+        $targets = array();
+        if ($this->manifest['themes']) {
+            foreach ($paths as $path) {
+                $splitPath = explode('/', $path);
+                $themes[$splitPath[0]][] = $path;
             }
-        }
-        if (empty($version)) {
-            $version = 0;
+
+            foreach (array_keys($themes) as $theme) {
+                $targets[$theme] = $basePath . '/' . str_replace('theme', $theme, $this->manifest['name']);;
+            }
+        } else {
+            $themes['default'] = $paths;
+            $targets['default'] = $basePath.'/'.$this->manifest['name'];
         }
 
+        $manifests = array();
+        $versions = array();
+        foreach ($targets as $theme => $target) {
+            $output->writeln('<info>[file+]</info> '.$target);
+            if (file_exists($target)) {
+                $manifests[$theme] = file_get_contents($target);
+                if (preg_match('/^#Version: (\d+)$/m', $manifests[$theme], $matches)) {
+                    $versions[$theme] = (int)$matches[1];
+                }
+            }
+        }
+
+        foreach ($versions as $theme => $version) {
+            if (empty($version)) {
+                $versions[$theme] = 0;
+            }
+        }
+
+        $cacheFiles = array();
         if (!empty($this->manifest['cacheFiles'])) {
             foreach ($this->manifest['cacheFiles'] as $path) {
                 $finder = new Finder(); // Needs to be reinialized for each path
@@ -215,7 +239,7 @@ class DumpCommand extends ContainerAwareCommand
                     ->name(basename($path));
                 foreach ($iterator as $file) {
                     if ($file->isFile()) {
-                        $paths[] = str_replace($basePath.'/', '', $file->getPath()).'/'.$file->getFilename();
+                        $cacheFiles[] = str_replace($basePath.'/', '', $file->getPath()).'/'.$file->getFilename();
                     }
                 }
             }
@@ -223,23 +247,28 @@ class DumpCommand extends ContainerAwareCommand
 
         $networkUrls = implode("\n", $this->manifest['networkRessources']);
         $cacheUrls = implode("\n", $this->manifest['cacheRessources']);
-        $list = implode("\n", $paths);
 
-        $newManifest = <<< EOF
+        foreach ($themes as $theme => $paths) {
+            $list = implode("\n", $paths);
+            $list .= "\n";
+            $list .= implode("\n", $cacheFiles);
+
+            $newManifest = <<< EOF
 CACHE MANIFEST
-#Version: $version
+#Version: $versions[$theme]
 $list
 $cacheUrls
 
 NETWORK:
 $networkUrls
 EOF;
-        if (isset($manifest) && $newManifest === $manifest) {
-            $output->writeln('<info>Not writing manifest: files did not change</info> '.$target);
-        } else {
-            $manifest = str_replace("#Version: $version", "#Version: ".($version+1), $newManifest);
-            if (false === @file_put_contents($target, $manifest)) {
-                throw new \RuntimeException('Unable to write file '.$target);
+            if (isset($manifests[$theme]) && $newManifest === $manifests[$theme]) {
+                $output->writeln('<info>Not writing manifest: files did not change</info> '.$targets[$theme]);
+            } else {
+                $manifests[$theme] = str_replace("#Version: $version", "#Version: ".($version+1), $newManifest);
+                if (false === @file_put_contents($targets[$theme], $manifests[$theme])) {
+                    throw new \RuntimeException('Unable to write file '.$targets[$theme]);
+                }
             }
         }
     }
