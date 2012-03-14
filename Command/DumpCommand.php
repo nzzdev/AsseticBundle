@@ -224,8 +224,8 @@ class DumpCommand extends ContainerAwareCommand
             }
         }
 
-        foreach ($versions as $theme => $version) {
-            if (empty($version)) {
+        foreach (array_keys($themes) as $theme) {
+            if (empty($versions[$theme])) {
                 $versions[$theme] = 0;
             }
         }
@@ -265,7 +265,7 @@ EOF;
             if (isset($manifests[$theme]) && $newManifest === $manifests[$theme]) {
                 $output->writeln('<info>Not writing manifest: files did not change</info> '.$targets[$theme]);
             } else {
-                $manifests[$theme] = str_replace("#Version: $version", "#Version: ".($version+1), $newManifest);
+                $manifests[$theme] = str_replace("#Version: $versions[$theme]", "#Version: ".($versions[$theme]+1), $newManifest);
                 if (false === @file_put_contents($targets[$theme], $manifests[$theme])) {
                     throw new \RuntimeException('Unable to write file '.$targets[$theme]);
                 }
